@@ -1,14 +1,3 @@
-# Copyright 2020 - 2022 MONAI Consortium
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import argparse
 import os
 from time import time
@@ -22,10 +11,12 @@ from optimizers.lr_scheduler import WarmupCosineSchedule
 from torch.cuda.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
-from utils.data_utils import *
+from utils.brain_data_utils import *
 from utils.ops import *
 from utils.utils import AverageMeter, distributed_all_gather
 import torch.multiprocessing
+import sys
+from typing import Optional
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 os.environ['CUDA_VISIBLE_DEVICES'] = "0"
@@ -48,15 +39,23 @@ def main():
         loss_train = []
         run_loss = AverageMeter()
         pos_avg, neg_avg, base_avg = AverageMeter(), AverageMeter(), AverageMeter()
+        train_loader
+
 
         for step, batch in enumerate(train_loader):
             t1 = time()
-            img, labels, crops = batch
+            print('len batch', len(batch))
+            i,o,u,y,t,r,e,w,q = batch
+            print(i)
+
+            # img, labels, crops = batch
+
             img, crops = concat_image(img), concat_image(crops)
             # print(img.size(), crops.size(), labels.size())
             img, crops, labels = img.cuda(), crops.cuda(), labels.cuda()
 
             with autocast(enabled=args.amp):
+                # loss = model(img, crops, labels)
                 pos, neg, b_loss = model(img, crops, labels)
                 loss = pos + neg + b_loss
                 loss_train.append(loss.item())
@@ -120,8 +119,13 @@ def main():
 
         return global_step, loss, val_best
 
+
+
+##########################################################
+
     roi = 64
     parser = argparse.ArgumentParser(description="PyTorch Training")
+    parser.add_argument("--num_workers", default=1, type=Optional[int], help="number of workers not a arg in original")
     parser.add_argument("--logdir", default="logs", type=str, help="directory to save logs")
     parser.add_argument("--epochs", default=100, type=int, help="number of training epochs")
     parser.add_argument("--num_steps", default=250000, type=int, help="number of training iterations")
@@ -142,7 +146,7 @@ def main():
     parser.add_argument("--roi_x", default=roi, type=int, help="roi size in x direction")
     parser.add_argument("--roi_y", default=roi, type=int, help="roi size in y direction")
     parser.add_argument("--roi_z", default=roi, type=int, help="roi size in z direction")
-    parser.add_argument("--batch_size", default=2, type=int, help="number of batch size")
+    parser.add_argument("--batch_size", default=1, type=int, help="number of batch size")
     parser.add_argument("--sw_batch_size", default=2, type=int, help="number of sliding window batch size")
     parser.add_argument("--lr", default=1e-4, type=float, help="learning rate")
     parser.add_argument("--decay", default=0.1, type=float, help="decay rate")
@@ -152,7 +156,7 @@ def main():
     parser.add_argument("--loss_type", default="SSL", type=str)
     parser.add_argument("--opt", default="adamw", type=str, help="optimization algorithm")
     parser.add_argument("--lr_schedule", default="warmup_cosine", type=str)
-    # './runs/logs_10k/model_current_epoch.pt'
+
     parser.add_argument("--resume", default=None, type=str,
                         help="resume training")
     parser.add_argument("--local_rank", type=int, default=0, help="local rank")
@@ -171,6 +175,8 @@ def main():
     torch.backends.cudnn.benchmark = True
     # torch.autograd.set_detect_anomaly(True)
     args.distributed = False
+
+
     if "WORLD_SIZE" in os.environ:
         args.distributed = int(os.environ["WORLD_SIZE"]) > 1
     args.world_size = 1
@@ -182,6 +188,7 @@ def main():
         torch.distributed.init_process_group(backend="nccl", init_method=args.dist_url)
         args.world_size = torch.distributed.get_world_size()
         args.rank = torch.distributed.get_rank()
+
         print(
             "Training in distributed mode with multiple processes, 1 GPU per process. Process %d, total %d."
             % (args.rank, args.world_size)
@@ -276,3 +283,4 @@ def init_log(name, level=logging.INFO):
 
 if __name__ == "__main__":
     main()
+

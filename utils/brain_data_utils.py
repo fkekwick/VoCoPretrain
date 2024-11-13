@@ -90,6 +90,7 @@ def get_loader(args):
             train_sampler = DistributedSampler(dataset=train_ds, even_divisible=True, shuffle=True)
         else:
             train_sampler = None
+            
     num_workers = args.num_workers  
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size, num_workers=num_workers, sampler=train_sampler,
@@ -270,7 +271,7 @@ class VoCoAugmentation():
         for trans in crops_trans:
             crop = trans(x_in)
             crops.append(crop)
-        sys.exit()
+
 
         return imgs, labels, crops
 
